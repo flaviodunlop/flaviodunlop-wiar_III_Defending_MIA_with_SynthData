@@ -108,6 +108,21 @@ def preprocess_data(df):
     return X_preprocessed, y
 
 
+from scipy.stats import entropy
+from sklearn.metrics import log_loss
+
+# Extract richer features for MIA
+def extract_attack_features(model, X, y_true=None):
+    probs = model.predict_proba(X)
+    confs = np.max(probs, axis=1)
+    entropies = entropy(probs.T)  # careful: transpose
+    if y_true is not None:
+        losses = [log_loss([y], [p], labels=[0,1]) for y, p in zip(y_true, probs)]
+    else:
+        losses = np.zeros(len(confs))  # dummy
+    return np.vstack([confs, entropies, losses]).T
+
+
 
 
 
@@ -166,16 +181,20 @@ if __name__ == "__main__":
 
         # Building Trainset for Attack Model
         print('Train Attack Model')
-        # Querry Shadow Model with X_preprocessed_ref_in and X_preprocessed_ref_out
-        probs_in = dtc_shadow.predict_proba(X_preprocessed_ref_in)
-        probs_out = dtc_shadow.predict_proba(X_preprocessed_ref_out)
-        # add label 1 to in and 0 to out
-        y_shadow_in = np.ones(len(probs_in))
-        y_shadow_out = np.zeros(len(probs_out))
 
-        # Merge in and out
-        X_shadow = np.concatenate([probs_in, probs_out])
+        # Extrahiere Features für das Attack Model
+        X_shadow_in = extract_attack_features(dtc_shadow, X_preprocessed_ref_in, y_ref_in)
+        X_shadow_out = extract_attack_features(dtc_shadow, X_preprocessed_ref_out, y_ref_out)
+
+        # Labels für in/out
+        y_shadow_in = np.ones(len(X_shadow_in))
+        y_shadow_out = np.zeros(len(X_shadow_out))
+
+        # Merge für das Attack Model Training
+        X_shadow = np.concatenate([X_shadow_in, X_shadow_out])
         y_shadow = np.concatenate([y_shadow_in, y_shadow_out])
+
+
 
         # Train Attack Model
         #attack_model = DecisionTreeClassifier(random_state=local_seed)
@@ -197,8 +216,12 @@ if __name__ == "__main__":
         X_preprocessed_real_out, y_real_out = preprocess_data(real_out)
 
         # Attack on Model
-        attack_pred_in = attack_model.predict(dtc_real.predict_proba(X_preprocessed_real_in))
-        attack_pred_out = attack_model.predict(dtc_real.predict_proba(X_preprocessed_real_out))
+        X_attack_in = extract_attack_features(dtc_real, X_preprocessed_real_in, y_real_in)
+        X_attack_out = extract_attack_features(dtc_real, X_preprocessed_real_out, y_real_out)
+
+        attack_pred_in = attack_model.predict(X_attack_in)
+        attack_pred_out = attack_model.predict(X_attack_out)
+
 
         # Merge attack_pred_in and attack_pred_out
         y_pred_label = np.concatenate([attack_pred_in, attack_pred_out])
@@ -207,11 +230,11 @@ if __name__ == "__main__":
         print("MIA Attack Accuracy ML(real Data):", accuracy_score(y_label, y_pred_label))
 
         # Prediction of the attack model
-        attack_pred_in_synth = attack_model.predict(dtc_synth.predict_proba(X_preprocessed_real_in))
-        attack_pred_out_synth = attack_model.predict(dtc_synth.predict_proba(X_preprocessed_real_out))
+        X_attack_in_synth = extract_attack_features(dtc_synth, X_preprocessed_real_in, y_real_in)
+        X_attack_out_synth = extract_attack_features(dtc_synth, X_preprocessed_real_out, y_real_out)
 
-        print(attack_pred_in_synth)
-        print(attack_pred_out_synth)
+        attack_pred_in_synth = attack_model.predict(X_attack_in_synth)
+        attack_pred_out_synth = attack_model.predict(X_attack_out_synth)
 
 
         # Merge attack_pred_in and attack_pred_out (synthetic data)
