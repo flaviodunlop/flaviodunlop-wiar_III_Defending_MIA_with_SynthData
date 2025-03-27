@@ -24,7 +24,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Set global random seed
-rng = np.random.default_rng(seed=42)
+rng = np.random.default_rng(seed=187)
 
 # 2. Load and prepare data
 adult = fetch_ucirepo(id=2) 
@@ -116,10 +116,11 @@ if __name__ == "__main__":
     real_accuracy = []
     synth_accuracy = []
 
-    for i in range(0, 10): 
+    for i in range(0,5): 
         print('Iteration:', i)
         print('Preparing Datasets')
         local_seed = rng.integers(0, 1000)
+
         real, ref = real_ref_split(df, local_seed)
         real_in, real_out = in_out_split(real, local_seed)
 
@@ -139,6 +140,15 @@ if __name__ == "__main__":
         # on real data
         dtc_real = DecisionTreeClassifier(random_state=local_seed, max_depth=12)
         dtc_real.fit(X_preprocessed_real, y_real)
+
+        # for test
+        y_pred = dtc_real.predict(X_preprocessed_real)
+        print(f'Accuracy Train: {accuracy_score(y_pred, y_real)}')
+
+
+        X_preprocessed_real_out, y_real_out = preprocess_data(real_out)
+        y_pred_out = dtc_real.predict(X_preprocessed_real_out)
+        print(f'Accuracy Test: {accuracy_score(y_pred_out, y_real_out)}')
 
         # on synthetic data
         dtc_synth = DecisionTreeClassifier(random_state=local_seed, max_depth=12)
@@ -168,7 +178,8 @@ if __name__ == "__main__":
         y_shadow = np.concatenate([y_shadow_in, y_shadow_out])
 
         # Train Attack Model
-        attack_model = RandomForestClassifier(n_estimators=100, random_state=local_seed)
+        attack_model = DecisionTreeClassifier(random_state=local_seed)
+        #attack_model = RandomForestClassifier(n_estimators=100, random_state=local_seed)
         attack_model.fit(X_shadow, y_shadow)
 
         # MIA
