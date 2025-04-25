@@ -132,6 +132,7 @@ if __name__ == "__main__":
     real_accuracy = []
     synth_accuracy = []
 
+    #  CV loop
     for i in range(0,5): 
         print('Iteration:', i)
         print('Preparing Datasets')
@@ -143,6 +144,10 @@ if __name__ == "__main__":
         print('Creating Synthetic Data')
         # load metadata
         metadata = Metadata.load_from_json(filepath='synth_data/metadata/adult_metadata_v1.json')
+        # Copula
+        #synthesizer = GaussianCopulaSynthesizer(metadata)
+        
+        # CTGAN
         synthesizer = GaussianCopulaSynthesizer(metadata)
         synthesizer.fit(real_in) # Training
         synth_in = synthesizer.sample(num_rows=len(real_in)) # Generating synthetic data
@@ -247,7 +252,7 @@ if __name__ == "__main__":
 
     # Save Results
     df_result = pd.DataFrame(list(zip(real_accuracy, synth_accuracy)), columns=['real_accuracy', 'synth_accuracy'])
-    df_result.to_csv('results/MIA_Attack_Results.csv', index=False)
+    df_result.to_csv('results/MIA_Attack_Results_CTGAN.csv', index=False)
 
 
     print('MIA Experiment Finished')
