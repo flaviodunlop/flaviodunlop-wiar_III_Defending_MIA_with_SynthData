@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import f1_score
 
 
 from sklearn.metrics import roc_auc_score, accuracy_score
@@ -131,6 +132,8 @@ if __name__ == "__main__":
     print('Start MIA Experiment...')
     real_accuracy = []
     synth_accuracy = []
+    real_f1_test = []
+    synth_f1_test = []
 
     #  CV loop
     for i in range(0,5): 
@@ -146,9 +149,8 @@ if __name__ == "__main__":
         metadata = Metadata.load_from_json(filepath='synth_data/metadata/adult_metadata_v1.json')
         # Copula
         #synthesizer = GaussianCopulaSynthesizer(metadata)
-        
         # CTGAN
-        synthesizer = GaussianCopulaSynthesizer(metadata)
+        synthesizer = CTGANSynthesizer(metadata, verbose = True, epochs=100)
         synthesizer.fit(real_in) # Training
         synth_in = synthesizer.sample(num_rows=len(real_in)) # Generating synthetic data
 
@@ -170,9 +172,22 @@ if __name__ == "__main__":
         y_pred_out = dtc_real.predict(X_preprocessed_real_out)
         print(f'Accuracy Test: {accuracy_score(y_pred_out, y_real_out)}')
 
+        # calculate f1 score (for Trad-Off Evaluation)
+        f1 = f1_score(y_real_out, y_pred_out)
+        print(f'F1 Score: {f1}')
+        real_f1_test.append(f1)
+
         # on synthetic data
         dtc_synth = DecisionTreeClassifier(random_state=local_seed)
         dtc_synth.fit(X_preprocessed_synt, y_synth)
+
+        y_pred_out_synth = dtc_synth.predict(X_preprocessed_real_out)
+        print(f'Accuracy Test Synth: {accuracy_score(y_pred_out_synth, y_real_out)}')
+
+        # calculate f1 score (for Trad-Off Evaluation)
+        f1_synth = f1_score(y_real_out, y_pred_out_synth)
+        print(f'F1 Score Synth: {f1_synth}')
+        synth_f1_test.append(f1_synth)
 
         # Train Shadow Model
         print('Training Shadow Model')
@@ -213,8 +228,8 @@ if __name__ == "__main__":
         y_label_in = np.ones(len(real_in))
         y_label_out = np.zeros(len(real_out))
         # Merge y_label_in and y_label_out
-        y_label = np.concatenate([y_label_in, y_label_out]
-        )
+        y_label = np.concatenate([y_label_in, y_label_out])
+
         # Data Prep real_in and real_out / will be used as test set
         # Preprocessing of both datasets
         X_preprocessed_real_in, y_real_in = preprocess_data(real_in)
@@ -226,7 +241,6 @@ if __name__ == "__main__":
 
         attack_pred_in = attack_model.predict(X_attack_in)
         attack_pred_out = attack_model.predict(X_attack_out)
-
 
         # Merge attack_pred_in and attack_pred_out
         y_pred_label = np.concatenate([attack_pred_in, attack_pred_out])
@@ -241,7 +255,6 @@ if __name__ == "__main__":
         attack_pred_in_synth = attack_model.predict(X_attack_in_synth)
         attack_pred_out_synth = attack_model.predict(X_attack_out_synth)
 
-
         # Merge attack_pred_in and attack_pred_out (synthetic data)
         y_pred_label_synth = np.concatenate([attack_pred_in_synth, attack_pred_out_synth])
 
@@ -251,7 +264,7 @@ if __name__ == "__main__":
         print("MIA Attack Accuracy ML(synth Data):", accuracy_score(y_label, y_pred_label_synth))
 
     # Save Results
-    df_result = pd.DataFrame(list(zip(real_accuracy, synth_accuracy)), columns=['real_accuracy', 'synth_accuracy'])
+    df_result = pd.DataFrame(list(zip(real_accuracy, synth_accuracy, real_f1_test, synth_f1_test )), columns=['real_accuracy', 'synth_accuracy', 'f1_ml_real', 'f1_ml_synth'])
     df_result.to_csv('results/MIA_Attack_Results_CTGAN.csv', index=False)
 
 
